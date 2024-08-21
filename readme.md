@@ -1,10 +1,10 @@
 # Distribuidor de documentos - 08-08-2024
 
-No trabalho gastamos uma enorme quantidade de tempo colocando os documentos dos funcionários nas respectivas pastas. Então, Jessica, minha colega de trabalho, me perguntou se não havia maneira de melhorar esse processo. Assim, tive a ideia de criar um script simples usando Python e a sua biblioteca nativa OS. 
+No meu atual trabalho, dia 20/08/2024, gastamos uma enorme quantidade de tempo colocando os documentos dos funcionários nas respectivas pastas. Então, Jessica, minha colega de trabalho, me perguntou se não havia maneira de melhorar esse processo. Assim, tive a ideia de criar um script simples usando Python e a sua biblioteca nativa OS. 
 
 A solução envolve criar uma pasta de transição e dentro dessa pasta ficará todos os arquivos que serão distribuídos. Os arquivos precisam ser nomeados de uma forma padronizada para que o script possa ser executado. Além disso, é necessário uma pasta de destino que contenha os diretórios que deseja guardar os arquivos.
 
-No caso da minha empresa, organizamos os arquivos com um diretório principal que contem todas as pastas nomeadas com o nome do colaborador e dentro de cada pasta temos 6 subpastas representando assuntos distintos e nomeadas conforme eles, como: Advertências, atestados, documentos.
+Na estrutura atual da empresa, organizamos os arquivos em um diretório principal que contém pastas nomeadas com o nome de cada colaborador. Dentro de cada pasta, há seis subpastas que representam assuntos distintos e são nomeadas de acordo com esses temas, tais como: Advertências, Atestados e Documentos.
 
 ## Padrão dos nomes dos arquivos
 
