@@ -1,48 +1,80 @@
+from fuzzywuzzy import fuzz
+import unicodedata
 import os
 import shutil
 import json
+import tkinter as tk
+from tkinter import messagebox
 
 class File_distributor():
     def __init__(self):
         self.from_folder = ""
         self.to_folder = ""
         self.get_src()
+    
+    def clear_name(self, name: str) -> str:
+        """
+            Normalize the employee's name: remove accents, eliminate unnecessary words ('de', 'da', 'do', 'das', 'dos'), and convert all characters to lowercase.
 
-    def distribute_files(self):
-        self.get_src()
+            Input:
+                - name (Employee's name)
+                
+            Output:
+                - name (Processed employee's name).
+        """
+        stopwords = {"de", "da", "do", "das", "dos"} 
+        name = unicodedata.normalize("NFKD", name).encode("ASCII", "ignore").decode("ASCII")
+        name =  " ".join(name.split())
+        name = name.lower()
+        name = " ".join([word for word in name.split() if word not in stopwords])
+        return name
 
-        if self.from_folder == "" or self.to_folder == "":
-            return
+    def validate_name_match(self, first_name: str, second_name: str, similarity_score: int = 85) -> bool:
+        """
+            Compare two names based on similarity score and return a boolean value.
 
-        file_names= os.listdir(self.from_folder)
+            Input:
+                - first_name (First employee's name)
+                - second_name (Second employee's name)
+                - similarity_score (Similarity rate: 100% means exactly the same, 0% means completely different)
+                
+            Output:
+                - bool (Boolean indicating whether the name matches the given similarity threshold).
+        """
+        first_name = self.clear_name(first_name)
+        second_name = self.clear_name(second_name)
 
-        for name_with_extension in file_names:
-            file_extension = os.path.splitext(name_with_extension)[1]
-            file_name = os.path.splitext(name_with_extension)[0]
+        similarity = fuzz.ratio(first_name, second_name)
 
-            list_of_names = file_name.split(" - ")
-            if len(list_of_names) != 3:
-                return
-            
-            main_folder = list_of_names[0]
-            subfolder = list_of_names[1]
-            observation = list_of_names[2]
-            
-            new_file_name = f"{observation}{file_extension}"
+        if similarity >= similarity_score:
+            return True
+        else:
+            return False
 
-            file_origin = f"{self.from_folder}/{name_with_extension}"
-            file_destination = f"{self.to_folder}/{main_folder}/{subfolder}/{new_file_name}" 
+    def check_addresses(self, *addresses: str) -> None:
+        """
+            Check if the file paths exist on the computer. If not, return a ValueError.
 
-            if os.path.exists(f"{self.to_folder}/{main_folder}/{subfolder}/{new_file_name}"):
-                print(f"O arquivo ({name_with_extension}) não pode ser renomeado para ({new_file_name}), pois, já exite um arquivo com esse nome na pasta de destino")
-                continue
+            Input:
+                - *addresses (File paths)
+        """
+        for address in addresses:
+            if not os.path.exists(address):
+                raise ValueError(f"Endereço invalido: {address}")
 
-            try:
-                shutil.move(file_origin, file_destination)
-            except FileNotFoundError:
-                print(name_with_extension)
+    def save_src(self, source: str, destination: str) -> None:
+        """
+            Verify and save the source and destination folder paths in a JSON file named "src_save.json" at the project root.
 
-    def save_src(self, source = str, destination = str):
+            Input:
+                - source (Source path)
+                - destination (Destination path)
+        """
+        source = os.path.normpath(source)
+        destination = os.path.normpath(destination)
+
+        self.check_addresses(source, destination)
+        
         datas = {
             "from_folder": source,
             "to_folder": destination,
@@ -55,39 +87,190 @@ class File_distributor():
         
         self.get_src()
 
-
-    def get_src(self):
+    def get_src(self) -> None:
+        """
+            Retrieve the source and destination paths from the "src_save.json" file at the project root and store them in the class variables: from_folder and to_folder.
+        """
+        empty_path = os.path.exists("src_save.json")
+        if not empty_path:
+            self.from_folder = ""
+            self.to_folder = ""
+            return
 
         try:
             with open("src_save.json", "r") as file:
                 json_str = file.read()
         except:
-            return
+            raise Exception(f"Não foi possivel recuperar o endereço do arquivo src_save.json")
         
         datas = json.loads(json_str)
 
         self.from_folder = datas["from_folder"]
         self.to_folder = datas["to_folder"]
+                
+    def _find_pdfs_files(self, address_file) -> list:
+        """
+            Identify PDF files in a directory and extract information from their filenames.
 
-    
-    def rename(self):
+            Input:
+                - address_file (str): Path to the directory containing the files.
+
+            Output:
+                - list: A list of dictionaries with extracted details, including:
+                    - employee_name (str): Employee's name.
+                    - origin_address (str): Full path of the file.
+                    - subfolder (str or None): Subfolder, if applicable.
+                    - new_file_name (str): Processed filename.
+        """
+        pdf_files = []
+
+        for file_name in os.listdir(address_file):
+            full_path = os.path.join(address_file, file_name)
+            is_pdf = os.path.isfile(full_path) and file_name.lower().endswith(".pdf")
+            if is_pdf:
+                parts = file_name.split("; ")
+                
+                info_pdf = {}
+                if len(parts) == 3:
+                    info_pdf = {
+                        "employee_name": parts[0],
+                        "origin_address": full_path,
+                        "subfolder": parts[1],
+                        "new_file_name": parts[2],
+                    }
+                elif len(parts) == 2:
+                    info_pdf = {
+                        "employee_name": parts[0],
+                        "origin_address": full_path,
+                        "subfolder": None,
+                        "new_file_name": parts[1],
+                    }
+                else:
+                    continue
+                
+                pdf_files.append(info_pdf)
+       
+        pdf_files = sorted(pdf_files, key=lambda x: x["employee_name"])
+        return pdf_files
+
+    def _list_folders(self, address_file) -> list:
+        """
+            Identify subfolders in a directory and extract information from their names.
+
+            Input:
+                - address_file (str): Path to the directory where the subfolders are located.
+
+            Output:
+                - list: A list of dictionaries with extracted details, including:
+                    - folder_name (str): Name of the subfolder.
+                    - full_path (str): Full path of the subfolder.
+        """
+        folder_list = []
+
+        for folder_name in os.listdir(address_file):
+            full_path = os.path.join(address_file, folder_name)
+            if os.path.isdir(full_path):
+                info_dir = {
+                        "name": folder_name,
+                        "address": full_path
+                    }
+                folder_list.append(info_dir)
+        
+        folder_list = sorted(folder_list, key=lambda x: x["name"])
+        return folder_list
+
+    def rename(self) -> None:
+        """
+            Retrieve the source folder and rename PDF files within it.
+
+            Process:
+                - Obtain the source directory.
+                - If the source folder is empty, return.
+                - List all PDF file names in the source folder.
+                - Rename each file based on processed file names.
+
+            Output:
+                - None: Files are renamed within the source folder. 
+        """
         self.get_src()
-        file_names= os.listdir(self.from_folder)
 
-        for name_with_extension in file_names:
-            file_extension = os.path.splitext(name_with_extension)[1]
-            file_name = os.path.splitext(name_with_extension)[0]
+        if self.from_folder == "":
+            raise ValueError("Informe o endereço de origem.")
 
-            list_of_names = file_name.split(" - ")
-            if len(list_of_names) != 3:
+        pdf_files_list = self._find_pdfs_files(self.from_folder)
+        
+        for pdf in pdf_files_list:
+                pdf_address = pdf["origin_address"]
+                new_file_name = os.path.join(self.from_folder, pdf["new_file_name"])                     
+                
+                os.rename(pdf_address, new_file_name)
+
+    def _move_pdf(self, origin_address, final_path) -> None:
+        """
+            Move a PDF file from one directory to another, verifying the existence of the destination file and requesting confirmation if it already exists.
+
+            Input:
+                - origin_address (str): Path to the original PDF file.
+                - final_path (str): Destination path for the PDF file.
+
+            Output:
+                - None: The file is moved to the destination if confirmed by the user.
+        """
+        if os.path.exists(final_path):
+            root = tk.Tk()
+            root.withdraw()
+            resp = messagebox.askyesno("Confirmação", f"O arquivo '{os.path.basename(final_path)}' já existe. Deseja sobrescrevê-lo?")
+
+            if not resp:
                 return
+        
+        try:
+            shutil.move(origin_address, final_path)
+        except Exception as e:
+            raise OSError(f"Erro inesperado ao mover o arquivo: {e}")
             
-            observation = list_of_names[2]
-            
-            new_file_name = f"{observation}{file_extension}"
+    def distribute_files(self) -> None:
+        """
+            Distribute PDF files among corresponding folders based on naming criteria.
 
-            os.rename(f"{self.from_folder}\{name_with_extension}", f"{self.from_folder}\{new_file_name}")
+            Input:
+                - No direct arguments (uses class attributes).
 
-           
+            Process:
+                - Retrieve the source and destination directories for the PDF files.
+                - Identify PDF files in the source folder.
+                - List available folders in the destination directory.
+                - Check for matches between file names and folder names.
+                - If a corresponding subfolder exists, adjust the destination path.
+                - Move the files to the appropriate folder.
 
-           
+            Output:
+                - None: Files are correctly distributed into the corresponding folders.
+        """
+        self.get_src()
+
+        if self.from_folder == "" or self.to_folder == "":
+            raise ValueError("Informe os endereços de origem e destino.")
+
+        pdf_files_list = self._find_pdfs_files(self.from_folder)
+        folder_list = self._list_folders(self.to_folder)
+        
+        for pdf in pdf_files_list:
+            for folder in folder_list:
+                if not self.validate_name_match(pdf["employee_name"], folder["name"]):
+                    continue
+
+                pdf_origin_address = pdf["origin_address"]
+                new_pdf_name = pdf["new_file_name"]
+                target_folder_path = folder["address"]                
+
+                if pdf["subfolder"]:
+                    subfolders_list = self._list_folders(folder["address"])
+                    for target_subfolder in subfolders_list:
+                        if self.validate_name_match(pdf["subfolder"], target_subfolder["name"]):
+                            target_folder_path = target_subfolder["address"]
+                            break 
+    
+                final_pdf_path = os.path.join(target_folder_path, new_pdf_name)
+
+                self._move_pdf(pdf_origin_address, final_pdf_path)
